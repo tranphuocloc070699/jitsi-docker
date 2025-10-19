@@ -1,0 +1,199 @@
+/* Tuổi Trẻ - Họp trực tuyến Custom Theme */
+/* Custom Login Page with Purple Gradient */
+
+/* Primary green color variables (for meeting room) */
+:root {
+    --tuoitre-green: #4CAF50;
+    --tuoitre-green-dark: #388E3C;
+    --tuoitre-green-light: #66BB6A;
+    --tuoitre-green-alpha: rgba(76, 175, 80, 0.8);
+}
+
+/* Welcome page - Purple gradient background for login */
+.welcome,
+.welcome-page,
+#react > div > div,
+body.welcome-page {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background-size: cover !important;
+}
+
+/* Hide default Jitsi welcome page content */
+.welcome-page-content,
+.welcome .welcome-watermark,
+.welcome .header,
+.welcome-page > div > div:not(#custom-login) {
+    display: none !important;
+}
+
+/* Alternative: Green gradient only */
+.welcome.green-only {
+    background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 25%, #4CAF50 50%, #66BB6A 75%, #81C784 100%);
+}
+
+/* Primary buttons */
+.prejoin-preview-dropdown-btn,
+.prejoin-preview-dropdown-container .toolbox-icon,
+button[aria-label*="Join"],
+button.primary,
+.toolbox-button.toggled,
+.action-btn.primary {
+    background-color: var(--tuoitre-green) !important;
+}
+
+.prejoin-preview-dropdown-btn:hover,
+button[aria-label*="Join"]:hover,
+button.primary:hover,
+.action-btn.primary:hover {
+    background-color: var(--tuoitre-green-dark) !important;
+}
+
+/* Toolbar buttons when active */
+.toolbox-button.toggled {
+    background-color: var(--tuoitre-green-alpha) !important;
+}
+
+/* Dominant speaker indicator */
+.dominant-speaker,
+.avatar-container.active-speaker {
+    box-shadow: 0 0 0 4px var(--tuoitre-green) !important;
+}
+
+/* Filmstrip borders and active states */
+.videocontainer.active-speaker {
+    border: 2px solid var(--tuoitre-green) !important;
+}
+
+/* Progress bars */
+.progress-indicator,
+.audio-level-indicator {
+    background-color: var(--tuoitre-green) !important;
+}
+
+/* Links and accents */
+a {
+    color: var(--tuoitre-green-light);
+}
+
+a:hover {
+    color: var(--tuoitre-green);
+}
+
+/* Raised hand indicator */
+.raisehand-badge,
+.badge.badge--primary {
+    background-color: var(--tuoitre-green) !important;
+}
+
+/* Input focus states */
+input:focus,
+textarea:focus,
+.field input:focus {
+    border-color: var(--tuoitre-green) !important;
+    outline-color: var(--tuoitre-green) !important;
+}
+
+/* Toggle switches */
+.toggle-switch input:checked + .slider {
+    background-color: var(--tuoitre-green) !important;
+}
+
+/* Checkboxes */
+input[type="checkbox"]:checked {
+    background-color: var(--tuoitre-green) !important;
+    border-color: var(--tuoitre-green) !important;
+}
+
+/* Modal primary actions */
+.modal-dialog button.primary,
+.dialog button.primary {
+    background-color: var(--tuoitre-green) !important;
+}
+
+.modal-dialog button.primary:hover,
+.dialog button.primary:hover {
+    background-color: var(--tuoitre-green-dark) !important;
+}
+
+/* Notification badges */
+.notification-badge {
+    background-color: var(--tuoitre-green) !important;
+}
+
+/* Recording indicator */
+.recording-badge,
+.rec-indicator {
+    background-color: var(--tuoitre-green) !important;
+}
+
+/* Tabs active state */
+.tab.selected,
+.tab-content.active {
+    border-bottom-color: var(--tuoitre-green) !important;
+}
+
+/* Participant connection quality bars */
+.connection-indicator .connection-indicator_quality_good {
+    background-color: var(--tuoitre-green) !important;
+}
+
+/* Lobby screen branding - Keep default */
+.lobby-screen {
+    /* Keep default Jitsi lobby background */
+    background: inherit;
+}
+
+/* Chat message highlights */
+.chat-message.local {
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+/* Subtle green tint for active elements - not too much */
+.active,
+.selected,
+.highlighted {
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+/* Hide footer on welcome page */
+.welcome .welcome-footer,
+.welcome-page .welcome-footer,
+footer,
+.footer,
+[class*="footer" i] {
+    display: none !important;
+}
+
+/* Hide banner */
+.welcome-page-banner,
+.chrome-extension-banner,
+.app-promo-banner,
+[class*="banner" i],
+.notice,
+.announcement {
+    display: none !important;
+}
+
+/* Hide app store badges */
+img[src*="f-droid-badge"],
+img[src*="app-store-badge"],
+img[src*="google-play-badge"],
+img[src*="/images/f-droid-badge.png"],
+img[src*="/images/app-store-badge.png"],
+img[src*="/images/google-play-badge.png"],
+.app-badge,
+.store-badge,
+[class*="badge" i][class*="app" i],
+[class*="badge" i][class*="store" i] {
+    display: none !important;
+}
+
+/* Lobby/prejoin screen - Keep default or use subtle background */
+.premeeting-screen,
+.prejoin-container,
+.prejoin-full,
+div[class*="premeeting"],
+div[class*="prejoin"] {
+    /* Keep default Jitsi prejoin background for better contrast with video preview */
+    background: inherit;
+}

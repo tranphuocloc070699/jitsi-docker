@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập Họp trực tuyến</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            width: 480px;
+            max-width: 90vw;
+            min-width: 320px;
+        }
+        .logo-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo-container img {
+            height: 80px;
+            width: auto;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 25px 0;
+            color: #666;
+            font-size: 13px;
+        }
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+        .section-divider::before {
+            margin-right: 15px;
+        }
+        .section-divider::after {
+            margin-left: 15px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .hint {
+            color: #888;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+            border: 1px solid #fca5a5;
+        }
+        .error.show {
+            display: block;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .loading.show {
+            display: block;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo-container">
+            <img src="/images/logo.png" alt="Logo">
+        </div>
+        <h1>🎥 Họp trực tuyến</h1>
+        <div class="loading" id="loading">⏳ Đang xác thực...</div>
+        <div class="error" id="error"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="room">Tên phòng họp</label>
+                <input type="text" id="room" name="room" placeholder="" value="">
+            </div>
+
+            <div class="section-divider">Đăng nhập tài khoản domain</div>
+
+            <div class="form-group">
+                <label for="username">Tên đăng nhập</label>
+                <input type="text" id="username" name="username" required
+                       autocomplete="username" placeholder="Nhập tên đăng nhập">
+            </div>
+            <div class="form-group" style="margin-bottom:20px">
+                <label for="password">Mật khẩu</label>
+                <input type="password" id="password" name="password" required
+                       autocomplete="current-password" placeholder="Nhập mật khẩu">
+            </div>
+            <div style="margin-top:20px">
+                <button type="button" id="joinRoomBtn">Tham gia</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // Get JITSI_DOMAIN from config or use current domain
+            const JITSI_DOMAIN = window.location.hostname;
+
+            // Get room name from URL query parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomFromQuery = urlParams.get('room');
+            if (roomFromQuery) {
+                document.getElementById('room').value = roomFromQuery;
+            }
+
+            // Get returnUrl parameter (where to redirect after login)
+            const returnUrl = urlParams.get('returnUrl');
+
+            async function handleAuth(isModerator) {
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+                const room = document.getElementById('room').value.trim() || '*';
+                const errorDiv = document.getElementById('error');
+                const loading = document.getElementById('loading');
+                const joinBtn = document.getElementById('joinRoomBtn');
+
+                // Basic validation
+                if (!username || !password) {
+                    errorDiv.textContent = 'Vui lòng nhập tên đăng nhập và mật khẩu';
+                    errorDiv.classList.add('show');
+                    return;
+                }
+
+                // Reset UI
+                errorDiv.classList.remove('show');
+                loading.classList.add('show');
+                joinBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/auth/ldap', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: username,
+                            password: password,
+                            room: room,
+                            moderator: isModerator
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        // Success! Redirect to Jitsi with JWT
+                        let redirectUrl;
+
+                        if (returnUrl) {
+                            // Use returnUrl if provided
+                            redirectUrl = returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'jwt=' + data.token;
+                        } else {
+                            // Default: redirect to room
+                            const roomPath = room === '*' ? '' : room;
+                            redirectUrl = 'https://' + JITSI_DOMAIN + '/' + roomPath + '?jwt=' + data.token;
+                        }
+
+                        window.location.href = redirectUrl;
+                    } else {
+                        // Authentication failed
+                        loading.classList.remove('show');
+                        joinBtn.disabled = false;
+                        errorDiv.textContent = data.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+                        errorDiv.classList.add('show');
+                    }
+                } catch (error) {
+                    // Network or server error
+                    loading.classList.remove('show');
+                    joinBtn.disabled = false;
+                    errorDiv.textContent = 'Không thể kết nối đến máy chủ xác thực. Vui lòng thử lại.';
+                    errorDiv.classList.add('show');
+                    console.error('Authentication error:', error);
+                }
+            }
+
+            // Handle Join Room button (moderator: false)
+            document.getElementById('joinRoomBtn').addEventListener('click', () => {
+                handleAuth(false);
+            });
+
+            // Handle form submit (Enter key)
+            document.getElementById('loginForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleAuth(false); // Default to join (moderator: false)
+            });
+
+            // Auto-focus room field if empty, otherwise username field
+            if (document.getElementById('room').value) {
+                document.getElementById('username').focus();
+            } else {
+                document.getElementById('room').focus();
+            }
+
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!-- JWT Authentication Check and Redirect Logic -->
+<script>
+(function() {
+
+
+console.log("body html");
+    'use strict';
+
+    // Check if we're on a room page (not welcome page, not login page)
+    const currentPath = window.location.pathname;
+    const isLoginPage = currentPath === '/login' || currentPath === '/login.html';
+    const isWelcomePage = currentPath === '/' || currentPath === '';
+    const isRoomPage = !isLoginPage && !isWelcomePage && currentPath !== '/';
+
+    // Check for JWT token in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasJWT = urlParams.has('jwt');
+
+    // If accessing a room without JWT, redirect to login
+    if (isRoomPage && !hasJWT) {
+        const roomName = currentPath.replace(/^\//, '').replace(/\/$/, '');
+        const returnUrl = encodeURIComponent(window.location.href);
+        window.location.href = '/login?room=' + encodeURIComponent(roomName) + '&returnUrl=' + returnUrl;
+    }
+
+    // Only run welcome page customization on welcome page
+    if (isWelcomePage) {
+        // Text replacement for welcome page
+        function replaceText() {
+            const walker = document.createTreeWalker(
+                document.body,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
+            );
+
+            let node;
+            while(node = walker.nextNode()) {
+                if (node.nodeValue) {
+                    node.nodeValue = node.nodeValue
+                        .replace(/Jitsi Meet/g, 'Họp trực tuyến')
+                        .replace(/Secure and high quality meeting/g, 'Họp trực tuyến của Báo Tuổi Trẻ')
+                        .replace(/Secure, fully featured, and completely free video conferencing/g, 'Họp trực tuyến của Báo Tuổi Trẻ');
+                }
+            }
+
+            // Update page title
+            if (document.title.includes('Jitsi Meet')) {
+                document.title = document.title.replace(/Jitsi Meet/g, 'Họp trực tuyến');
+            }
+        }
+
+        // Run on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', replaceText);
+        } else {
+            replaceText();
+        }
+
+        // Run periodically to catch dynamic content
+        setTimeout(replaceText, 500);
+        setTimeout(replaceText, 1000);
+        setTimeout(replaceText, 2000);
+
+        // Use MutationObserver to catch dynamic content changes
+        const observer = new MutationObserver(replaceText);
+        observer.observe(document.body || document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+
+        // Wait for interfaceConfig to be loaded and modify it
+        function modifyInterfaceConfig() {
+            if (window.interfaceConfig) {
+                window.interfaceConfig.APP_NAME = 'Họp trực tuyến';
+                window.interfaceConfig.DISPLAY_WELCOME_FOOTER = false;
+                window.interfaceConfig.MOBILE_APP_PROMO = false;
+                window.interfaceConfig.SHOW_CHROME_EXTENSION_BANNER = false;
+            } else {
+                setTimeout(modifyInterfaceConfig, 100);
+            }
+        }
+        modifyInterfaceConfig();
+    }
+
+    // Custom Vietnamese translations
+    // Override kicked-out message
+    function overrideTranslations() {
+        if (window.APP && window.APP.translation) {
+            // Override the kicked message
+            window.APP.translation.addLanguage('vi', {
+                'dialog.kickTitle': 'Bạn được mời ra khỏi cuộc họp',
+                'dialog.kickMessage': 'Bạn được mời ra khỏi cuộc họp, cảm ơn bạn đã tham gia',
+                'dialog.sessTerminated': 'Bạn được mời ra khỏi cuộc họp, cảm ơn bạn đã tham gia',
+                'dialog.kicked': 'Bạn được mời ra khỏi cuộc họp, cảm ơn bạn đã tham gia',
+                'kickedOut': 'Bạn được mời ra khỏi cuộc họp, cảm ơn bạn đã tham gia',
+                "welcomepage.headerSubtitle":"123123123123"
+            });
+        } else {
+            setTimeout(overrideTranslations, 500);
+        }
+    }
+
+    // Run translation override
+    setTimeout(overrideTranslations, 10000);
+
+})();
+</script>
+
+<!-- Load Custom Vietnamese Translations -->
+
+<!-- Force Vietnamese Language -->
+<script>
+(function() {
+    'use strict';
+
+    // Override language detection to force Vietnamese
+    if (window.interfaceConfig) {
+        window.interfaceConfig.LANG_DETECTION = false;
+        window.interfaceConfig.DEFAULT_LANGUAGE = 'vi';
+    }
+
+    // Set default language in config
+    if (window.config) {
+        window.config.defaultLanguage = 'vi';
+        window.config.lang = 'vi';
+    }
+
+    // Override localStorage language preference
+    try {
+        localStorage.setItem('jitsiMeetId.language', 'vi');
+        localStorage.setItem('language', 'vi');
+    } catch (e) {
+        console.log('Could not set language in localStorage:', e);
+    }
+
+    // Force Vietnamese in i18next if available
+    if (window.i18next) {
+        window.i18next.changeLanguage('vi');
+    }
+})();
+</script>
