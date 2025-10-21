@@ -1,29 +1,29 @@
 admins = {
     
-    "jigasi@auth.meet.jitsi",
+    "jigasi@auth.meeting.gamesrcs.com",
     
 
     
-    "jibri@auth.meet.jitsi",
+    "jibri@auth.meeting.gamesrcs.com",
     
 
-    "focus@auth.meet.jitsi",
-    "jvb@auth.meet.jitsi"
+    "focus@auth.meeting.gamesrcs.com",
+    "jvb@auth.meeting.gamesrcs.com"
 }
 
 unlimited_jids = {
-    "focus@auth.meet.jitsi",
-    "jvb@auth.meet.jitsi"
+    "focus@auth.meeting.gamesrcs.com",
+    "jvb@auth.meeting.gamesrcs.com"
 }
 
 plugin_paths = { "/prosody-plugins/", "/prosody-plugins-custom", "/prosody-plugins-contrib" }
 
-muc_mapper_domain_base = "meet.jitsi";
+muc_mapper_domain_base = "meeting.gamesrcs.com";
 muc_mapper_domain_prefix = "muc";
 
 recorder_prefixes = { "recorder@hidden.meet.jitsi" };
 
-http_default_host = "meet.jitsi"
+http_default_host = "meeting.gamesrcs.com"
 
 
 asap_accepted_issuers = { "jitsi_app" }
@@ -44,7 +44,7 @@ smacks_max_old_sessions = 1;
 
 
 
-VirtualHost "meet.jitsi"
+VirtualHost "meeting.gamesrcs.com"
 
   
   authentication = "token"
@@ -58,8 +58,8 @@ VirtualHost "meet.jitsi"
   
 
     ssl = {
-        key = "/config/certs/meet.jitsi.key";
-        certificate = "/config/certs/meet.jitsi.crt";
+        key = "/config/certs/meeting.gamesrcs.com.key";
+        certificate = "/config/certs/meeting.gamesrcs.com.crt";
     }
     modules_enabled = {
         "bosh";
@@ -74,8 +74,6 @@ VirtualHost "meet.jitsi"
         "end_conference";
         
         
-        "muc_lobby_rooms";
-        
         
         "muc_breakout_rooms";
         
@@ -89,28 +87,25 @@ VirtualHost "meet.jitsi"
 
     }
 
-    main_muc = "muc.meet.jitsi"
-    room_metadata_component = "metadata.meet.jitsi"
-    
-    lobby_muc = "lobby.meet.jitsi"
-    
+    main_muc = "muc.meeting.gamesrcs.com"
+    room_metadata_component = "metadata.meeting.gamesrcs.com"
     
 
     
 
     
-    breakout_rooms_muc = "breakout.meet.jitsi"
+    breakout_rooms_muc = "breakout.meeting.gamesrcs.com"
     
 
-    speakerstats_component = "speakerstats.meet.jitsi"
-    conference_duration_component = "conferenceduration.meet.jitsi"
+    speakerstats_component = "speakerstats.meeting.gamesrcs.com"
+    conference_duration_component = "conferenceduration.meeting.gamesrcs.com"
 
     
-    end_conference_component = "endconference.meet.jitsi"
+    end_conference_component = "endconference.meeting.gamesrcs.com"
     
 
     
-    av_moderation_component = "avmoderation.meet.jitsi"
+    av_moderation_component = "avmoderation.meeting.gamesrcs.com"
     
 
     c2s_require_encryption = true
@@ -118,11 +113,23 @@ VirtualHost "meet.jitsi"
     
 
     
+VirtualHost "guest.meeting.gamesrcs.com"
+    authentication = "jitsi-anonymous"
+    modules_enabled = {
+        
+        "smacks"; -- XEP-0198: Stream Management
+        
+    }
 
-VirtualHost "auth.meet.jitsi"
+    c2s_require_encryption = true
+    
+
+
+
+VirtualHost "auth.meeting.gamesrcs.com"
     ssl = {
-        key = "/config/certs/auth.meet.jitsi.key";
-        certificate = "/config/certs/auth.meet.jitsi.crt";
+        key = "/config/certs/auth.meeting.gamesrcs.com.key";
+        certificate = "/config/certs/auth.meeting.gamesrcs.com.crt";
     }
     modules_enabled = {
         "limits_exception";
@@ -133,25 +140,26 @@ VirtualHost "auth.meet.jitsi"
 
 
 
-Component "internal-muc.meet.jitsi" "muc"
+Component "internal-muc.meeting.gamesrcs.com" "muc"
     storage = "memory"
     modules_enabled = {
         "muc_hide_all";
         "muc_filter_access";
         }
     restrict_room_creation = true
-    muc_filter_whitelist="auth.meet.jitsi"
+    muc_filter_whitelist="auth.meeting.gamesrcs.com"
     muc_room_locking = false
     muc_room_default_public_jids = true
     muc_room_cache_size = 1000
     muc_tombstones = false
     muc_room_allow_persistent = false
 
-Component "muc.meet.jitsi" "muc"
+Component "muc.meeting.gamesrcs.com" "muc"
     restrict_room_creation = true
     storage = "memory"
     modules_enabled = {
         "muc_meeting_id";
+        "token_affiliation";
         "token_verification";
         
         "polls";
@@ -168,46 +176,34 @@ Component "muc.meet.jitsi" "muc"
     muc_room_default_public_jids = true
     
     muc_password_whitelist = {
-        "focus@auth.meet.jitsi";
+        "focus@auth.meeting.gamesrcs.com";
     }
     muc_tombstones = false
     muc_room_allow_persistent = false
 
-Component "focus.meet.jitsi" "client_proxy"
-    target_address = "focus@auth.meet.jitsi"
+Component "focus.meeting.gamesrcs.com" "client_proxy"
+    target_address = "focus@auth.meeting.gamesrcs.com"
 
-Component "speakerstats.meet.jitsi" "speakerstats_component"
-    muc_component = "muc.meet.jitsi"
+Component "speakerstats.meeting.gamesrcs.com" "speakerstats_component"
+    muc_component = "muc.meeting.gamesrcs.com"
 
-Component "conferenceduration.meet.jitsi" "conference_duration_component"
-    muc_component = "muc.meet.jitsi"
-
-
-Component "endconference.meet.jitsi" "end_conference"
-    muc_component = "muc.meet.jitsi"
+Component "conferenceduration.meeting.gamesrcs.com" "conference_duration_component"
+    muc_component = "muc.meeting.gamesrcs.com"
 
 
-
-Component "avmoderation.meet.jitsi" "av_moderation_component"
-    muc_component = "muc.meet.jitsi"
+Component "endconference.meeting.gamesrcs.com" "end_conference"
+    muc_component = "muc.meeting.gamesrcs.com"
 
 
 
-Component "lobby.meet.jitsi" "muc"
-    storage = "memory"
-    restrict_room_creation = true
-    muc_tombstones = false
-    muc_room_allow_persistent = false
-    muc_room_cache_size = 10000
-    muc_room_locking = false
-    muc_room_default_public_jids = true
-    modules_enabled = {
-    }
-
-    
+Component "avmoderation.meeting.gamesrcs.com" "av_moderation_component"
+    muc_component = "muc.meeting.gamesrcs.com"
 
 
-Component "breakout.meet.jitsi" "muc"
+
+
+
+Component "breakout.meeting.gamesrcs.com" "muc"
     storage = "memory"
     restrict_room_creation = true
     muc_room_cache_size = 10000
@@ -221,9 +217,9 @@ Component "breakout.meet.jitsi" "muc"
         }
 
 
-Component "metadata.meet.jitsi" "room_metadata_component"
-    muc_component = "muc.meet.jitsi"
-    breakout_rooms_component = "breakout.meet.jitsi"
+Component "metadata.meeting.gamesrcs.com" "room_metadata_component"
+    muc_component = "muc.meeting.gamesrcs.com"
+    breakout_rooms_component = "breakout.meeting.gamesrcs.com"
 
 
 

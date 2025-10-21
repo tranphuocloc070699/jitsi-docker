@@ -1,5 +1,3 @@
-// Họp trực tuyến - Tuổi Trẻ - Jitsi Meet configuration.
-
 var config = {};
 
 // Branding
@@ -8,7 +6,7 @@ config.defaultRemoteDisplayName = 'Khách';
 config.defaultLogoUrl = 'images/logo.png';
 
 config.hosts = {};
-config.hosts.domain = 'meet.jitsi';
+config.hosts.domain = 'meeting.gamesrcs.com';  // ✅ FIXED
 
 var subdir = '<!--# echo var="subdir" default="" -->';
 var subdomain = '<!--# echo var="subdomain" default="" -->';
@@ -18,11 +16,11 @@ if (subdir.startsWith('<!--')) {
 if (subdomain) {
     subdomain = subdomain.substring(0,subdomain.length-1).split('.').join('_').toLowerCase() + '.';
 }
-config.hosts.muc = 'muc.' + subdomain + 'meet.jitsi';
+config.hosts.muc = 'muc.' + subdomain + 'meeting.gamesrcs.com';  // ✅ FIXED
 // When using authentication, domain for guest users.
-config.hosts.anonymousdomain = 'guest.meet.jitsi';
+config.hosts.anonymousdomain = 'guest.meeting.gamesrcs.com';  // ✅ FIXED
 // Domain for authenticated users. Defaults to <domain>.
-config.hosts.authdomain = 'meet.jitsi';
+config.hosts.authdomain = 'meeting.gamesrcs.com';  // ✅ FIXED
 config.bosh = 'https://meeting.gamesrcs.com/' + subdir + 'http-bind';
 config.websocket = 'wss://meeting.gamesrcs.com/' + subdir + 'xmpp-websocket';
 config.bridgeChannel = {
@@ -249,4 +247,3 @@ config.conference = {
 // Disable auto-grant moderator for JWT users
 config.disableModeratorIndicator = false;
 config.enableModeratorOnlyActions = true;
-
