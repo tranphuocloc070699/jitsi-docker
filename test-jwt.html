@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JWT Test</title>
+</head>
+<body>
+    <h1>JWT Token Generator Test</h1>
+    <button onclick="testJWT()">Generate JWT</button>
+    <pre id="output"></pre>
+
+    <script>
+        const JITSI_CONFIG = {
+            JWT_APP_ID: 'jitsi_app',
+            JWT_SECRET: '39RQlnugivCvauYQ9WXgJTwZqKJQ5O4uPXeuxs9y8RC9lIj7qu3NLqZAE+rMzxXm',
+            DOMAIN: 'meeting.gamesrcs.com'
+        };
+
+        function uuidv4() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function base64UrlEncodeString(str) {
+            const utf8Bytes = new TextEncoder().encode(str);
+            let binary = '';
+            utf8Bytes.forEach(byte => {
+                binary += String.fromCharCode(byte);
+            });
+            return btoa(binary)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        function base64UrlEncodeBytes(bytes) {
+            let binary = '';
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        function base64UrlDecode(str) {
+            // Add padding if needed
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            while (str.length % 4) {
+                str += '=';
+            }
+            try {
+                return JSON.parse(atob(str));
+            } catch (e) {
+                return atob(str);
+            }
+        }
+
+        async function signJWT(payload, secret) {
+            const header = { alg: 'HS256', typ: 'JWT' };
+            const encodedHeader = base64UrlEncodeString(JSON.stringify(header));
+            const encodedPayload = base64UrlEncodeString(JSON.stringify(payload));
+            const message = encodedHeader + '.' + encodedPayload;
+
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(secret);
+            const messageData = encoder.encode(message);
+
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+            );
+
+            const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+            const signatureArray = new Uint8Array(signature);
+            const signatureBase64 = base64UrlEncodeBytes(signatureArray);
+
+            return message + '.' + signatureBase64;
+        }
+
+        function decodeJWT(token) {
+            const parts = token.split('.');
+            if (parts.length !== 3) {
+                return { error: 'Invalid JWT format' };
+            }
+            return {
+                header: base64UrlDecode(parts[0]),
+                payload: base64UrlDecode(parts[1]),
+                signature: parts[2]
+            };
+        }
+
+        async function testJWT() {
+            try {
+                const now = Math.floor(Date.now() / 1000);
+                const payload = {
+                    context: {
+                        user: {
+                            id: uuidv4(),
+                            name: "Khách mời",
+                            email: "",
+                            moderator: false,
+                            affiliation: "member"
+                        },
+                        features: {
+                            livestreaming: false,
+                            recording: false,
+                            transcription: false
+                        }
+                    },
+                    aud: JITSI_CONFIG.JWT_APP_ID,
+                    iss: JITSI_CONFIG.JWT_APP_ID,
+                    sub: JITSI_CONFIG.DOMAIN,
+                    room: 'test-room',
+                    exp: now + 24 * 3600,
+                    nbf: now - 10
+                };
+
+                const token = await signJWT(payload, JITSI_CONFIG.JWT_SECRET);
+                const url = `https://${JITSI_CONFIG.DOMAIN}/test-room?jwt=${token}`;
+
+                // Decode the token for verification
+                const decoded = decodeJWT(token);
+
+                document.getElementById('output').textContent =
+                    '=== JWT TOKEN ===\n' + token + '\n\n' +
+                    '=== FULL URL ===\n' + url + '\n\n' +
+                    '=== DECODED HEADER ===\n' + JSON.stringify(decoded.header, null, 2) + '\n\n' +
+                    '=== DECODED PAYLOAD ===\n' + JSON.stringify(decoded.payload, null, 2) + '\n\n' +
+                    '=== SIGNATURE (BASE64URL) ===\n' + decoded.signature + '\n\n' +
+                    '=== CONFIGURATION ===\n' +
+                    'App ID: ' + JITSI_CONFIG.JWT_APP_ID + '\n' +
+                    'Domain: ' + JITSI_CONFIG.DOMAIN + '\n' +
+                    'Secret: ' + JITSI_CONFIG.JWT_SECRET + '\n' +
+                    'Secret Length: ' + JITSI_CONFIG.JWT_SECRET.length + ' chars\n\n' +
+                    '=== TIMESTAMPS ===\n' +
+                    'Issued (nbf): ' + new Date(payload.nbf * 1000).toISOString() + '\n' +
+                    'Expires (exp): ' + new Date(payload.exp * 1000).toISOString() + '\n' +
+                    'Current Time: ' + new Date().toISOString() + '\n\n' +
+                    '=== VALIDATION ===\n' +
+                    'Token length: ' + token.length + ' chars\n' +
+                    'Parts: ' + token.split('.').length + '\n' +
+                    'Algorithm: HS256';
+
+                console.log('✅ JWT generated successfully');
+                console.log('Full Token:', token);
+                console.log('Decoded:', decoded);
+            } catch (error) {
+                document.getElementById('output').textContent = '❌ Error: ' + error.message + '\n\n' + error.stack;
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

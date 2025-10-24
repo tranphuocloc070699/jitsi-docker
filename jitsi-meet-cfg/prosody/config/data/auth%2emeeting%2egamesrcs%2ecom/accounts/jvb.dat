@@ -1,6 +1,6 @@
 return {
+	["stored_key"] = "9a050b317d7f0714b10f635fe76bf701eae05202";
+	["salt"] = "1be34b67-be00-40dd-babe-13c8b6adf759";
 	["iteration_count"] = 10000;
-	["salt"] = "21ed6098-fc1f-44b2-8d60-ab10cd1d2479";
-	["stored_key"] = "fd816be122a8aa6ec6a8027a6af8cc06b69a0cee";
-	["server_key"] = "174bc369233ac72933f63068575ae1a2feda8649";
+	["server_key"] = "e812037a07372bf3e3a40a2503d033beea8f7fd2";
 };

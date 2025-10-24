@@ -140,3 +140,1218 @@ console.log("body html");
     }
 })();
 </script>
+
+<!-- Custom Invite Dialog Customization -->
+<script>
+(function() {
+    'use strict';
+
+    try {
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+    const API_CONFIG = {
+        // Profile list API
+        profileListUrl: 'https://dev-proxyapi.tuoitre.vn/booking_service/mock-up/list-profile',
+        userToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NTA1LCJlbWFpbCI6InBodW9jbG9jQHR1b2l0cmUuY29tLnZuIiwiZXhwIjo4ODE2MDkzMTUwOH0.wZnxQTudtVIoS5awU08CriQlCSOBB_lihsa_I3UwkKE',
+        xApiKey: '7HTw-twQyZFVat-GgKzuUy9X9nymbgRjGqA-5p1s0SM',
+        authToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsImlhdCI6MTc2MDA4MDE3NH0.ieUowRnYOUmGpc4LSEfxWwUPB-FYrWwQw2irx7pdKNU',
+
+        // Add user to meeting API
+        addUserToMeetingUrl: 'https://dev-proxyapi.tuoitre.vn/booking_service/online-meeting/add-user-in-meeting',
+
+        enableLogging: true
+    };
+
+    // Will be populated from API
+    let profileList = [];
+
+    // Jitsi JWT Configuration
+    const JITSI_CONFIG = {
+        JWT_APP_ID: 'jitsi_app',
+        JWT_SECRET: '39RQlnugivCvauYQ9WXgJTwZqKJQ5O4uPXeuxs9y8RC9lIj7qu3NLqZAE+rMzxXm',
+        DOMAIN: 'meeting.gamesrcs.com'
+    };
+
+    // ============================================
+    // JWT & UUID UTILITIES
+    // ============================================
+    const Utilities = {
+        // Simple UUID v4 generator
+        uuidv4() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        },
+
+        // Base64 URL encode for strings (UTF-8 safe)
+        base64UrlEncodeString(str) {
+            // Convert string to UTF-8 bytes, then to base64
+            const utf8Bytes = new TextEncoder().encode(str);
+            let binary = '';
+            utf8Bytes.forEach(byte => {
+                binary += String.fromCharCode(byte);
+            });
+            return btoa(binary)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        },
+
+        // Base64 URL encode for byte arrays
+        base64UrlEncodeBytes(bytes) {
+            let binary = '';
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        },
+
+        // Simple JWT sign function
+        async signJWT(payload, secret) {
+            const header = {
+                alg: 'HS256',
+                typ: 'JWT'
+            };
+
+            // Encode header and payload
+            const encodedHeader = this.base64UrlEncodeString(JSON.stringify(header));
+            const encodedPayload = this.base64UrlEncodeString(JSON.stringify(payload));
+            const message = encodedHeader + '.' + encodedPayload;
+
+            // Use Web Crypto API for HMAC-SHA256
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(secret);
+            const messageData = encoder.encode(message);
+
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw',
+                keyData,
+                { name: 'HMAC', hash: 'SHA-256' },
+                false,
+                ['sign']
+            );
+
+            const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+            const signatureArray = new Uint8Array(signature);
+
+            // Properly encode the signature bytes
+            const signatureBase64 = this.base64UrlEncodeBytes(signatureArray);
+
+            const jwt = message + '.' + signatureBase64;
+
+            if (API_CONFIG.enableLogging) {
+                console.log('🔑 JWT Debug Info:');
+                console.log('  Header:', JSON.stringify(header));
+                console.log('  Payload:', JSON.stringify(payload, null, 2));
+                console.log('  Secret length:', secret.length);
+                console.log('  Encoded header:', encodedHeader);
+                console.log('  Encoded payload:', encodedPayload);
+                console.log('  Signature (first 20 chars):', signatureBase64.substring(0, 20) + '...');
+                console.log('  Full JWT (first 50 chars):', jwt.substring(0, 50) + '...');
+            }
+
+            return jwt;
+        },
+
+        // Generate Jitsi JWT Token
+        async generateJitsiToken(room) {
+            const now = Math.floor(Date.now() / 1000);
+            const payload = {
+                context: {
+                    user: {
+                        id: this.uuidv4(),
+                        name: "Khách mời",
+                        email: "",
+                        moderator: false,
+                        affiliation: "member"
+                    },
+                    features: {
+                        livestreaming: false,
+                        recording: false,
+                        transcription: false
+                    }
+                },
+                aud: JITSI_CONFIG.JWT_APP_ID,
+                iss: JITSI_CONFIG.JWT_APP_ID,
+                sub: JITSI_CONFIG.DOMAIN,
+                room: room,
+                exp: now + 24 * 3600, // Token expires in 24 hours
+                nbf: now - 10 // Token valid from 10 seconds ago
+            };
+
+            return await this.signJWT(payload, JITSI_CONFIG.JWT_SECRET);
+        },
+
+        // Get current room name from URL
+        getCurrentRoom() {
+            const path = window.location.pathname;
+            return path.replace(/^\//, '').replace(/\/$/, '') || 'default-room';
+        },
+
+        // Copy to clipboard
+        async copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (err) {
+                // Fallback method
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    return true;
+                } catch (e) {
+                    document.body.removeChild(textArea);
+                    return false;
+                }
+            }
+        }
+    };
+
+    // ============================================
+    // API SERVICE
+    // ============================================
+    const API = {
+        async fetchProfiles() {
+            if (API_CONFIG.enableLogging) {
+                console.log('📥 Fetching profile list...');
+            }
+
+            try {
+                const url = `${API_CONFIG.profileListUrl}?is_important=false&page=1&page_size=1000&sort_by=id&order=desc`;
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'User-Token': API_CONFIG.userToken,
+                        'x-api-key': API_CONFIG.xApiKey,
+                        'Authorization': `Bearer ${API_CONFIG.authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                if (API_CONFIG.enableLogging) {
+                    console.log('✅ Profiles fetched:', result.data?.length || 0, 'profiles');
+                }
+
+                // Transform data to our format
+                profileList = (result.data || []).map(profile => ({
+                    id: profile.id,
+                    user_id: profile.user_id,
+                    email: profile.email,
+                    fullName: profile.full_name,
+                    phone: profile.phone,
+                    department: profile.user_dep_pos?.[0]?.department?.name || 'N/A',
+                    position: profile.user_dep_pos?.[0]?.position?.pos_name || 'N/A'
+                }));
+
+                return profileList;
+
+            } catch (error) {
+                console.error('❌ Failed to fetch profiles:', error);
+                throw error;
+            }
+        },
+
+        async sendInvites(selectedProfiles) {
+            if (API_CONFIG.enableLogging) {
+                console.log('📤 Sending invites to add users to meeting:', selectedProfiles);
+            }
+
+            try {
+                // Get slug from URL path (e.g., /abc -> slug = "abc")
+                const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '') || 'default-room';
+
+                // Extract participant IDs from selected profiles (using user_id)
+                const participant_ids = selectedProfiles.map(profile => profile.user_id);
+
+                if (API_CONFIG.enableLogging) {
+                    console.log('📤 Request payload:', { slug, participant_ids });
+                }
+
+                const response = await fetch(API_CONFIG.addUserToMeetingUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Token': API_CONFIG.userToken,
+                        'x-api-key': API_CONFIG.xApiKey,
+                        'Authorization': `Bearer ${API_CONFIG.authToken}`
+                    },
+                    body: JSON.stringify({
+                        slug: slug,
+                        participant_ids: participant_ids
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                if (API_CONFIG.enableLogging) {
+                    console.log('✅ API Response:', result);
+                }
+                return result;
+            } catch (error) {
+                console.error('❌ API Error:', error);
+                throw error;
+            }
+        }
+    };
+
+    // ============================================
+    // UI MANAGER
+    // ============================================
+    const UIManager = {
+        showNotification(message, type = 'info') {
+            console.log(`[${type.toUpperCase()}] ${message}`);
+
+            if (window.APP && window.APP.UI && window.APP.UI.messageHandler) {
+                window.APP.UI.messageHandler.notify(
+                    type === 'error' ? 'Lỗi' : 'Thành công',
+                    message
+                );
+            } else {
+                alert(message);
+            }
+        },
+
+        createLoadingIndicator() {
+            const loading = document.createElement('div');
+            loading.id = 'profile-loading';
+            loading.style.cssText = `
+                text-align: center;
+                padding: 40px;
+                color: #a4b8d5;
+            `;
+            loading.innerHTML = `
+                <div style="font-size: 14px; margin-bottom: 12px;">
+                    <svg width="40" height="40" viewBox="0 0 50 50" style="animation: spin 1s linear infinite;">
+                        <circle cx="25" cy="25" r="20" fill="none" stroke="#5294e0" stroke-width="4" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>Đang tải danh sách...</div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+            return loading;
+        },
+
+        createMultiSelectContainer(profiles = []) {
+            const container = document.createElement('div');
+            container.id = 'custom-multi-select-container';
+            container.style.cssText = `
+                background: #1e2124;
+                border-radius: 6px;
+                padding: 12px;
+                margin: 12px 0;
+            `;
+
+            // Title
+            const title = document.createElement('h3');
+            title.textContent = 'Chọn người để mời:';
+            title.style.cssText = `
+                margin: 0 0 10px 0;
+                font-size: 14px;
+                font-weight: 600;
+                color: #e8e9ea;
+            `;
+            container.appendChild(title);
+
+            // Search input
+            const searchContainer = document.createElement('div');
+            searchContainer.style.cssText = `
+                margin-bottom: 10px;
+            `;
+
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.id = 'profile-search-input';
+            searchInput.placeholder = '🔍 Tìm kiếm theo tên...';
+            searchInput.style.cssText = `
+                width: 100%;
+                padding: 8px 10px;
+                background: #2a2d31;
+                border: 1px solid #3d4146;
+                border-radius: 4px;
+                color: #e8e9ea;
+                font-size: 13px;
+                box-sizing: border-box;
+                outline: none;
+                transition: border-color 0.2s;
+            `;
+
+            searchInput.addEventListener('focus', function() {
+                this.style.borderColor = '#5294e0';
+            });
+
+            searchInput.addEventListener('blur', function() {
+                this.style.borderColor = '#3d4146';
+            });
+
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const items = container.querySelectorAll('.profile-item');
+
+                items.forEach(item => {
+                    const name = item.dataset.name.toLowerCase();
+                    const email = item.dataset.email.toLowerCase();
+                    const department = item.dataset.department.toLowerCase();
+
+                    if (name.includes(searchTerm) || email.includes(searchTerm) || department.includes(searchTerm)) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+
+            searchContainer.appendChild(searchInput);
+            container.appendChild(searchContainer);
+
+            // Profile list container
+            const listContainer = document.createElement('div');
+            listContainer.id = 'profile-list-container';
+            listContainer.style.cssText = `
+                max-height: 250px;
+                overflow-y: auto;
+                border: 1px solid #3d4146;
+                border-radius: 6px;
+                padding: 6px;
+                background: #2a2d31;
+            `;
+
+            // Custom scrollbar for dark mode, animations, and mobile fixes
+            const style = document.createElement('style');
+            style.textContent = `
+                #profile-list-container::-webkit-scrollbar {
+                    width: 8px;
+                }
+                #profile-list-container::-webkit-scrollbar-track {
+                    background: #1e2124;
+                    border-radius: 4px;
+                }
+                #profile-list-container::-webkit-scrollbar-thumb {
+                    background: #4a4f56;
+                    border-radius: 4px;
+                }
+                #profile-list-container::-webkit-scrollbar-thumb:hover {
+                    background: #5a6169;
+                }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+
+                /* Mobile fixes for dialog positioning */
+                @media (max-width: 768px) {
+                    [role="dialog"] {
+                        padding-top: 60px !important;
+                        padding-bottom: 20px !important;
+                        max-height: calc(100vh - 80px) !important;
+                    }
+
+                    /* Ensure close button is accessible */
+                    [role="dialog"] button[aria-label*="close"],
+                    [role="dialog"] button[aria-label*="Close"],
+                    [role="dialog"] button[aria-label*="Đóng"] {
+                        position: sticky !important;
+                        top: 10px !important;
+                        z-index: 9999 !important;
+                        margin-bottom: 10px !important;
+                        background: rgba(0, 0, 0, 0.8) !important;
+                        border-radius: 50% !important;
+                        padding: 8px !important;
+                        min-width: 40px !important;
+                        min-height: 40px !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }
+
+                    /* Make custom container more compact on mobile */
+                    #custom-multi-select-container {
+                        margin: 8px 0 !important;
+                        padding: 10px !important;
+                    }
+
+                    #profile-list-container {
+                        max-height: 200px !important;
+                    }
+                }
+
+                /* Tablet adjustments */
+                @media (min-width: 769px) and (max-width: 1024px) {
+                    [role="dialog"] {
+                        padding-top: 40px !important;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Create checkboxes for each profile
+            if (profiles.length === 0) {
+                const noData = document.createElement('div');
+                noData.style.cssText = `
+                    text-align: center;
+                    padding: 20px;
+                    color: #a4b8d5;
+                `;
+                noData.textContent = 'Không có dữ liệu';
+                listContainer.appendChild(noData);
+            } else {
+                profiles.forEach((person, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'profile-item';
+                    itemDiv.dataset.name = person.fullName || '';
+                    itemDiv.dataset.email = person.email || '';
+                    itemDiv.dataset.department = person.department || '';
+                    itemDiv.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        padding: 8px 10px;
+                        margin: 2px 0;
+                        background: #1e2124;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
+                        border: 1px solid transparent;
+                    `;
+
+                    itemDiv.addEventListener('mouseenter', function() {
+                        this.style.backgroundColor = '#2a2d31';
+                        this.style.borderColor = '#3d4146';
+                    });
+
+                    itemDiv.addEventListener('mouseleave', function() {
+                        if (!this.querySelector('input').checked) {
+                            this.style.backgroundColor = '#1e2124';
+                            this.style.borderColor = 'transparent';
+                        }
+                    });
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `profile-checkbox-${index}`;
+                    checkbox.value = person.email;
+                    checkbox.dataset.profileId = person.id;
+                    checkbox.style.cssText = `
+                        width: 16px;
+                        height: 16px;
+                        margin-right: 10px;
+                        cursor: pointer;
+                        accent-color: #5294e0;
+                        flex-shrink: 0;
+                    `;
+
+                    checkbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            itemDiv.style.backgroundColor = '#1e3a5f';
+                            itemDiv.style.borderColor = '#5294e0';
+                        } else {
+                            itemDiv.style.backgroundColor = '#1e2124';
+                            itemDiv.style.borderColor = 'transparent';
+                        }
+                    });
+
+                    const label = document.createElement('label');
+                    label.htmlFor = `profile-checkbox-${index}`;
+                    label.style.cssText = `
+                        flex: 1;
+                        cursor: pointer;
+                        display: flex;
+                        flex-direction: column;
+                        min-width: 0;
+                    `;
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = person.fullName || 'N/A';
+                    nameSpan.style.cssText = `
+                        font-weight: 500;
+                        color: #e8e9ea;
+                        font-size: 13px;
+                        margin-bottom: 2px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    `;
+
+                    const emailSpan = document.createElement('span');
+                    emailSpan.textContent = person.email || 'N/A';
+                    emailSpan.style.cssText = `
+                        font-size: 11px;
+                        color: #a4b8d5;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    `;
+
+                    label.appendChild(nameSpan);
+                    label.appendChild(emailSpan);
+
+                    itemDiv.appendChild(checkbox);
+                    itemDiv.appendChild(label);
+                    listContainer.appendChild(itemDiv);
+
+                    // Make whole item clickable
+                    itemDiv.addEventListener('click', function(e) {
+                        if (e.target !== checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                            checkbox.dispatchEvent(new Event('change'));
+                        }
+                    });
+                });
+            }
+
+            container.appendChild(listContainer);
+
+            // Select All / Deselect All buttons
+            const buttonRow = document.createElement('div');
+            buttonRow.style.cssText = `
+                display: flex;
+                gap: 6px;
+                margin-top: 8px;
+            `;
+
+            const selectAllBtn = document.createElement('button');
+            selectAllBtn.textContent = 'Chọn tất cả';
+            selectAllBtn.style.cssText = `
+                flex: 1;
+                padding: 7px 10px;
+                background: #2a2d31;
+                border: 1px solid #3d4146;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                color: #e8e9ea;
+                font-weight: 500;
+                transition: all 0.2s;
+            `;
+            selectAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const visibleItems = Array.from(container.querySelectorAll('.profile-item'))
+                    .filter(item => item.style.display !== 'none');
+
+                visibleItems.forEach(item => {
+                    const cb = item.querySelector('input[type="checkbox"]');
+                    if (cb) {
+                        cb.checked = true;
+                        cb.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
+            selectAllBtn.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#3d4146';
+                this.style.borderColor = '#5294e0';
+            });
+            selectAllBtn.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#2a2d31';
+                this.style.borderColor = '#3d4146';
+            });
+
+            const deselectAllBtn = document.createElement('button');
+            deselectAllBtn.textContent = 'Bỏ chọn tất cả';
+            deselectAllBtn.style.cssText = `
+                flex: 1;
+                padding: 7px 10px;
+                background: #2a2d31;
+                border: 1px solid #3d4146;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                color: #e8e9ea;
+                font-weight: 500;
+                transition: all 0.2s;
+            `;
+            deselectAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = false;
+                    cb.dispatchEvent(new Event('change'));
+                });
+            });
+            deselectAllBtn.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#3d4146';
+                this.style.borderColor = '#5294e0';
+            });
+            deselectAllBtn.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#2a2d31';
+                this.style.borderColor = '#3d4146';
+            });
+
+            buttonRow.appendChild(selectAllBtn);
+            buttonRow.appendChild(deselectAllBtn);
+            container.appendChild(buttonRow);
+
+            // Send button
+            const sendButton = document.createElement('button');
+            sendButton.id = 'send-invites-button';
+            sendButton.textContent = '✉️ Gửi lời mời';
+            sendButton.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin-top: 10px;
+                background: #5294e0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                box-shadow: 0 2px 8px rgba(82, 148, 224, 0.3);
+                transition: all 0.3s;
+            `;
+
+            sendButton.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#4080d0';
+                this.style.transform = 'translateY(-1px)';
+                this.style.boxShadow = '0 4px 12px rgba(82, 148, 224, 0.4)';
+            });
+
+            sendButton.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#5294e0';
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = '0 2px 8px rgba(82, 148, 224, 0.3)';
+            });
+
+            sendButton.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.handleSendInvites(container);
+            });
+
+            container.appendChild(sendButton);
+
+            // Separator text
+            const separatorDiv = document.createElement('div');
+            separatorDiv.style.cssText = `
+                text-align: center;
+                margin: 16px 0 10px 0;
+                color: #a4b8d5;
+                font-size: 12px;
+                position: relative;
+            `;
+            separatorDiv.innerHTML = `
+                <span style="background: #1e2124; padding: 0 10px; position: relative; z-index: 1;">
+                    hoặc chia sẻ đường dẫn dưới đây
+                </span>
+                <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #3d4146; z-index: 0;"></div>
+            `;
+            container.appendChild(separatorDiv);
+
+            // Copy link button
+            const copyLinkButton = document.createElement('button');
+            copyLinkButton.id = 'copy-link-button';
+            copyLinkButton.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Nhấn để sao chép</span>
+            `;
+            copyLinkButton.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                background: #2a2d31;
+                color: #e8e9ea;
+                border: 1px solid #3d4146;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            copyLinkButton.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#3d4146';
+                this.style.borderColor = '#5294e0';
+            });
+
+            copyLinkButton.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#2a2d31';
+                this.style.borderColor = '#3d4146';
+            });
+
+            copyLinkButton.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.handleCopyLink(copyLinkButton);
+            });
+
+            container.appendChild(copyLinkButton);
+
+            return container;
+        },
+
+        async handleCopyLink(button) {
+            try {
+                // Show loading state
+                const originalContent = button.innerHTML;
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 50 50" style="margin-right: 8px; animation: spin 1s linear infinite;">
+                        <circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
+                    </svg>
+                    <span>Đang tạo link...</span>
+                `;
+                button.disabled = true;
+
+                // Get current room
+                const room = Utilities.getCurrentRoom();
+
+                if (API_CONFIG.enableLogging) {
+                    console.log('🔗 Generating JWT token for room:', room);
+                }
+
+                // Generate JWT token
+                const token = await Utilities.generateJitsiToken(room);
+
+                // Create full URL
+                const meetingUrl = `https://${JITSI_CONFIG.DOMAIN}/${room}?jwt=${token}`;
+
+                if (API_CONFIG.enableLogging) {
+                    console.log('🔗 Generated URL:', meetingUrl);
+                    console.log('🔑 JWT Token:', token);
+                }
+
+                // Copy to clipboard
+                const success = await Utilities.copyToClipboard(meetingUrl);
+
+                if (success) {
+                    // Show success state
+                    button.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2" style="margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span style="color: #4caf50;">Đã sao chép!</span>
+                    `;
+
+                    this.showNotification('Đã sao chép đường dẫn vào clipboard!', 'success');
+
+                    // Reset button after 2 seconds
+                    setTimeout(() => {
+                        button.innerHTML = originalContent;
+                        button.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error('Không thể sao chép vào clipboard');
+                }
+
+            } catch (error) {
+                console.error('❌ Failed to copy link:', error);
+                this.showNotification('Không thể sao chép đường dẫn', 'error');
+
+                // Reset button
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Nhấn để sao chép</span>
+                `;
+                button.disabled = false;
+            }
+        },
+
+        async handleSendInvites(container) {
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedProfiles = Array.from(checkboxes).map(cb => {
+                const profileId = cb.dataset.profileId;
+                const profile = profileList.find(p => p.id == profileId);
+                return profile || { email: cb.value };
+            });
+
+            if (selectedProfiles.length === 0) {
+                this.showNotification('Vui lòng chọn ít nhất một người', 'error');
+                return;
+            }
+
+            try {
+                this.showNotification(`Đang gửi lời mời đến ${selectedProfiles.length} người...`, 'info');
+
+                const result = await API.sendInvites(selectedProfiles);
+
+                this.showNotification(`✅ Đã gửi lời mời đến ${selectedProfiles.length} người!`, 'success');
+
+                if (API_CONFIG.enableLogging) {
+                    console.log('✅ Invites sent successfully:', result);
+                }
+
+                // Uncheck all checkboxes after sending
+                container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = false;
+                    cb.dispatchEvent(new Event('change'));
+                });
+
+                // Close the popup after successful invite
+                this.closeInviteDialog();
+
+            } catch (error) {
+                this.showNotification('Không thể gửi lời mời', 'error');
+                console.error('❌ Failed to send invites:', error);
+            }
+        },
+
+        closeInviteDialog() {
+            try {
+                // Find the dialog/modal container
+                const dialogs = document.querySelectorAll('[role="dialog"]');
+
+                dialogs.forEach(dialog => {
+                    // Find close button in the dialog
+                    const closeButtons = dialog.querySelectorAll('button');
+                    closeButtons.forEach(btn => {
+                        const ariaLabel = btn.getAttribute('aria-label');
+                        if (ariaLabel && (
+                            ariaLabel.toLowerCase().includes('close') ||
+                            ariaLabel.toLowerCase().includes('đóng')
+                        )) {
+                            // Click the close button
+                            btn.click();
+                            if (API_CONFIG.enableLogging) {
+                                console.log('✅ Dialog closed successfully');
+                            }
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error('❌ Failed to close dialog:', error);
+            }
+        }
+    };
+
+    // ============================================
+    // DIALOG CUSTOMIZER
+    // ============================================
+    const DialogCustomizer = {
+        customizedDialogs: new Set(),
+
+        monitorInviteDialog() {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && this.isInviteDialog(node)) {
+                            this.customizeDialog(node);
+                        }
+                    });
+                });
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            if (API_CONFIG.enableLogging) {
+                console.log('👀 Monitoring for invite dialog...');
+            }
+        },
+
+        isInviteDialog(node) {
+            if (!node.querySelector) return false;
+
+            // Look for invite-related content
+            const hasInviteText = node.textContent && (
+                node.textContent.includes('Mời') ||
+                node.textContent.includes('invite') ||
+                node.textContent.includes('Invite')
+            );
+
+            // Check for common dialog classes
+            const hasDialogClass = node.classList && (
+                node.classList.contains('invite-dialog') ||
+                node.classList.contains('dialog') ||
+                node.querySelector('[class*="invite"]') ||
+                node.querySelector('[class*="add-people"]')
+            );
+
+            return hasInviteText && hasDialogClass;
+        },
+
+        async customizeDialog(dialog) {
+            // Prevent multiple customizations
+            if (this.customizedDialogs.has(dialog)) {
+                return;
+            }
+            this.customizedDialogs.add(dialog);
+
+            console.log('🎨 Customizing invite dialog...');
+
+            // Mobile: Ensure close button is accessible
+            this.fixMobileCloseButton(dialog);
+
+            // Hide share icons/buttons
+            this.hideShareIcons(dialog);
+
+            // Add loading indicator first
+            const dialogContent = this.getDialogContent(dialog);
+            if (dialogContent) {
+                const loading = UIManager.createLoadingIndicator();
+                const header = dialogContent.querySelector('h2, h3, [class*="header"]');
+                if (header && header.parentNode) {
+                    header.parentNode.insertBefore(loading, header.nextSibling);
+                } else {
+                    dialogContent.insertBefore(loading, dialogContent.firstChild);
+                }
+            }
+
+            // Fetch profiles and add multi-select
+            try {
+                await API.fetchProfiles();
+
+                // Remove loading
+                const loadingEl = document.getElementById('profile-loading');
+                if (loadingEl) {
+                    loadingEl.remove();
+                }
+
+                // Add multi-select component with fetched profiles
+                this.addMultiSelect(dialog);
+
+            } catch (error) {
+                console.error('Failed to load profiles:', error);
+
+                // Remove loading and show error
+                const loadingEl = document.getElementById('profile-loading');
+                if (loadingEl) {
+                    loadingEl.innerHTML = `
+                        <div style="color: #e57373; text-align: center; padding: 20px;">
+                            ❌ Không thể tải danh sách
+                            <div style="font-size: 12px; margin-top: 8px; color: #a4b8d5;">
+                                ${error.message}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        },
+
+        getDialogContent(dialog) {
+            return dialog.querySelector('[class*="dialog-content"]') ||
+                   dialog.querySelector('.dialog') ||
+                   dialog.querySelector('[role="dialog"]') ||
+                   dialog;
+        },
+
+        fixMobileCloseButton(dialog) {
+            // Check if mobile device
+            const isMobile = window.innerWidth <= 768;
+
+            if (isMobile) {
+                // Find close button
+                const closeButtons = dialog.querySelectorAll('button');
+                closeButtons.forEach(btn => {
+                    const ariaLabel = btn.getAttribute('aria-label');
+                    if (ariaLabel && (
+                        ariaLabel.toLowerCase().includes('close') ||
+                        ariaLabel.toLowerCase().includes('đóng')
+                    )) {
+                        // Add wrapper with safe padding
+                        const wrapper = document.createElement('div');
+                        wrapper.style.cssText = `
+                            position: sticky;
+                            top: 0;
+                            padding: 15px 15px 10px 15px;
+                            background: transparent;
+                            z-index: 10000;
+                            display: flex;
+                            justify-content: flex-end;
+                            margin: -10px -10px 0 -10px;
+                        `;
+
+                        // Style the button
+                        btn.style.cssText = `
+                            background: rgba(0, 0, 0, 0.9) !important;
+                            border-radius: 50% !important;
+                            padding: 10px !important;
+                            min-width: 44px !important;
+                            min-height: 44px !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            border: 2px solid rgba(255, 255, 255, 0.2) !important;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+                        `;
+
+                        // Wrap button
+                        if (btn.parentNode) {
+                            btn.parentNode.insertBefore(wrapper, btn);
+                            wrapper.appendChild(btn);
+                        }
+
+                        if (API_CONFIG.enableLogging) {
+                            console.log('✅ Mobile close button fixed');
+                        }
+                    }
+                });
+
+                // Add safe area for dialog
+                const dialogContent = this.getDialogContent(dialog);
+                if (dialogContent) {
+                    dialogContent.style.paddingTop = '10px';
+                    dialogContent.style.paddingBottom = 'max(20px, env(safe-area-inset-bottom))';
+                }
+            }
+        },
+
+        hideShareIcons(dialog) {
+            // Set overflow hidden on dialog to prevent content from showing
+            if (dialog.style) {
+                dialog.style.overflow = 'hidden';
+            }
+
+            // Find and hide the dialog content wrapper
+            const dialogContent = this.getDialogContent(dialog);
+            if (dialogContent && dialogContent.style) {
+                dialogContent.style.overflow = 'hidden';
+                dialogContent.style.maxHeight = '80vh';
+            }
+
+            // Hide various share-related elements and original content
+            const selectors = [
+                '[class*="share"]',
+                '[class*="copy-link"]',
+                '[aria-label*="share"]',
+                '[aria-label*="copy"]',
+                '[aria-label*="Sao chép"]',
+                'button[class*="copy"]',
+                'svg[class*="share"]',
+                '.sharing-features',
+                '.share-buttons',
+                '[class*="invite-more"]',
+                '[class*="add-people"]'
+            ];
+
+            selectors.forEach(selector => {
+                const elements = dialog.querySelectorAll(selector);
+                elements.forEach(el => {
+                    // Skip our custom elements
+                    if (el.id && (el.id.includes('custom') || el.id.includes('profile') || el.id.includes('send-invites'))) {
+                        return;
+                    }
+
+                    // Check if it's a share icon container or original invite content
+                    if (el.querySelector('svg') ||
+                        el.textContent.toLowerCase().includes('copy') ||
+                        el.textContent.toLowerCase().includes('share') ||
+                        el.textContent.toLowerCase().includes('sao chép') ||
+                        el.textContent.toLowerCase().includes('chia sẻ')) {
+                        el.style.display = 'none';
+                        if (API_CONFIG.enableLogging) {
+                            console.log('Hidden element:', el);
+                        }
+                    }
+                });
+            });
+
+            // Hide all buttons except our custom ones
+            const allButtons = dialog.querySelectorAll('button');
+            allButtons.forEach(btn => {
+                if (!btn.id || (!btn.id.includes('custom') && !btn.id.includes('send-invites') && !btn.id.includes('copy-link'))) {
+                    // Check if it's not a close button
+                    if (!btn.getAttribute('aria-label')?.includes('close') &&
+                        !btn.getAttribute('aria-label')?.includes('Đóng')) {
+                        btn.style.display = 'none';
+                    }
+                }
+            });
+
+            // Hide input fields and search boxes from original dialog
+            const inputs = dialog.querySelectorAll('input:not(#profile-search-input):not([type="checkbox"])');
+            inputs.forEach(input => {
+                if (!input.id || !input.id.includes('profile')) {
+                    input.style.display = 'none';
+                }
+            });
+
+            // Hide any lists or contact lists from original content
+            const lists = dialog.querySelectorAll('ul, ol');
+            lists.forEach(list => {
+                if (!list.closest('#custom-multi-select-container')) {
+                    list.style.display = 'none';
+                }
+            });
+        },
+
+        addMultiSelect(dialog) {
+            // Check if already added
+            if (dialog.querySelector('#custom-multi-select-container')) {
+                return;
+            }
+
+            // Find insertion point
+            const dialogContent = this.getDialogContent(dialog);
+
+            if (dialogContent) {
+                const multiSelect = UIManager.createMultiSelectContainer(profileList);
+
+                // Try to insert after header or at the beginning
+                const header = dialogContent.querySelector('h2, h3, [class*="header"]');
+                if (header && header.parentNode) {
+                    header.parentNode.insertBefore(multiSelect, header.nextSibling);
+                } else {
+                    dialogContent.insertBefore(multiSelect, dialogContent.firstChild);
+                }
+
+                console.log('✅ Multi-select added to invite dialog with', profileList.length, 'profiles');
+            }
+        }
+    };
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    function initialize() {
+        if (!document.body) {
+            setTimeout(initialize, 100);
+            return;
+        }
+
+        console.log('🚀 Initializing invite dialog customization...');
+
+        // Monitor for invite dialog
+        DialogCustomizer.monitorInviteDialog();
+
+        console.log('✅ Invite dialog customization initialized');
+    }
+
+    // Start initialization
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initialize);
+    } else {
+        initialize();
+    }
+
+    // Also try on window load
+    window.addEventListener('load', () => {
+        setTimeout(initialize, 500);
+    });
+
+    } catch (error) {
+        console.error('❌ Error in custom invite dialog:', error);
+        // Don't break the page - just log the error
+    }
+
+})();
+</script>

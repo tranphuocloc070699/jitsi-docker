@@ -238,7 +238,7 @@ config.jwt = {
 // Moderator rules
 config.conference = {
     // Chỉ user đầu tiên là mod nếu room trống
-    firstUserIsModerator: true,
+    firstUserIsModerator: false,
     
     // JWT users with moderator:false cannot be moderator
     enforceJwtModeratorRole: true
